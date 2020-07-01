@@ -35,10 +35,14 @@ const int RESERVE_ORDER_NUM = 1000000;
 #define IOSTREAM_CLASS(VAR) friend std::ostream& operator<<(std::ostream& os, const VAR& v){ os << "{\ntype:" << #VAR << "\n";
 #define IOSTREAM_CLASS_END ; os << "}";return os;} 
 
+
+#define PRICE_NONE -1
+#define INDEX_NONE -1
+
 struct node{
-    int ind_next = -1;
-    int ind_prev = -1;
-    int m_index = -1;
+    int ind_next = INDEX_NONE;
+    int ind_prev = INDEX_NONE;
+    int m_index = INDEX_NONE;
     
     IOSTREAM_CLASS(node){
         IOSTREAM_TYPE(m_index);
@@ -54,7 +58,7 @@ inline void idq_insert(CONTAINER& con, node& old_node, node& new_node){
     new_node.ind_prev = old_node.ind_prev;
 
     old_node.ind_prev = new_node.m_index;
-    if(new_node.ind_prev != -1){
+    if(new_node.ind_prev != INDEX_NONE){
         con[new_node.ind_prev].ind_next = new_node.m_index;
     }
 }
@@ -65,21 +69,21 @@ inline void idq_insert_back(CONTAINER& con, node& old_node, node& new_node){
     new_node.ind_next = old_node.ind_next;
 
     old_node.ind_next = new_node.m_index;
-    if(new_node.ind_next != -1){
+    if(new_node.ind_next != INDEX_NONE){
         con[new_node.ind_next].ind_prev = new_node.m_index;
     }
 }
 
 template<typename CONTAINER>
 inline void idq_remove(CONTAINER& con, node& n){
-    if(n.ind_next != -1){
+    if(n.ind_next != INDEX_NONE){
         con[n.ind_next].ind_prev = n.ind_prev;
     }
-    if(n.ind_prev != -1){
+    if(n.ind_prev != INDEX_NONE){
         con[n.ind_prev].ind_next = n.ind_next;
     }
-    n.ind_next = -1;
-    n.ind_prev = -1;
+    n.ind_next = INDEX_NONE;
+    n.ind_prev = INDEX_NONE;
 }
 
 
@@ -100,17 +104,17 @@ std::ostream& operator <<(std::ostream& os, const ORDER_SIDE& s){
 
 
 struct PriceLevel:node{
-    int price = -1;
+    int price = PRICE_NONE;
 
     int num_of_buy_orders = 0;
     int num_of_sell_orders = 0;
 
-    int buy_order_begin_index = -1;
-    int buy_order_end_index = -1;
+    int buy_order_begin_index = INDEX_NONE;
+    int buy_order_end_index = INDEX_NONE;
 
 
-    int sell_order_begin_index = -1;
-    int sell_order_end_index = -1;
+    int sell_order_begin_index = INDEX_NONE;
+    int sell_order_end_index = INDEX_NONE;
 
 
     IOSTREAM_CLASS(PriceLevel){
@@ -131,11 +135,11 @@ struct PriceLevel:node{
 
 
 struct Order: node{
-    int id = -1;
+    int id = INDEX_NONE;
     ORDER_SIDE side = ORDER_SIDE::NONE;
-    short status = -1;  //order_tatus  0:init 1:available 2:completed.
-    int quantity = -1;
-    int price_level_index = -1;
+    short status = INDEX_NONE;  //order_tatus  0:init 1:available 2:completed.
+    int quantity = INDEX_NONE;
+    int price_level_index = INDEX_NONE;
 
     IOSTREAM_CLASS(Order){
         IOSTREAM_TYPE(id);
@@ -157,21 +161,25 @@ struct Order: node{
 
 class OrderStore;
 
+
+
+
+
 class PriceLadder{
 
     std::vector<PriceLevel> v_price_levels;
     std::unordered_map<int,int> price_level_index;
     int current_price_level_count = 0;
 
-    int begin_index = -1; //point lowest price level.
-    int end_index = -1; //point highest price level.
+    int begin_index = INDEX_NONE; //point lowest price level.
+    int end_index = INDEX_NONE; //point highest price level.
 
 
     //min/max price and index;  
-    int min_ask_price = -1;
-    int min_ask_index = -1;
-    int max_bid_price = -1;
-    int max_bid_index = -1;
+    int min_ask_price = PRICE_NONE;
+    int min_ask_index = INDEX_NONE;
+    int max_bid_price = PRICE_NONE;
+    int max_bid_index = INDEX_NONE;
 
 public:
     PriceLadder(int reserved_level_count):v_price_levels(reserved_level_count){
@@ -201,12 +209,12 @@ public:
 
     inline void update_bbo(int price, ORDER_SIDE side, int index){
         if(side == ORDER_SIDE::BID){
-            if( max_bid_price == -1 || price > max_bid_price){
+            if( max_bid_price == PRICE_NONE || price > max_bid_price){
                 max_bid_price = price;
                 max_bid_index = index;
             }
         }else{
-            if( min_ask_price == -1 || price < min_ask_price){
+            if( min_ask_price == PRICE_NONE || price < min_ask_price){
                 min_ask_price = price;
                 min_ask_index = index;
             }
@@ -216,17 +224,17 @@ public:
 
     int add_price_level(int price, ORDER_SIDE side){
         int index = get_price_level_index(price);
-        if(v_price_levels[index].ind_next != -1 || v_price_levels[index].ind_prev != -1){ //price alread in queue. 
+        if(v_price_levels[index].ind_next != INDEX_NONE || v_price_levels[index].ind_prev != INDEX_NONE){ //price alread in queue. 
             return index;
         }
-        if(begin_index == -1) //empty ladder.
+        if(begin_index == INDEX_NONE) //empty ladder.
         {
             begin_index = index;
             end_index = index;
             return index;
         }
         else{
-            for(int i = begin_index ;  i != -1 ; i = v_price_levels[i].ind_next){
+            for(int i = begin_index ;  i != INDEX_NONE ; i = v_price_levels[i].ind_next){
                 if( v_price_levels[i].price > price){
                     idq_insert(v_price_levels,v_price_levels[i],v_price_levels[index]);
                     if(i == begin_index)begin_index = index;
@@ -252,7 +260,7 @@ public:
     void for_each(F func, bool reverse = false) const{
         int start = begin_index;
         if(reverse) start = end_index;
-        for(int i = start;  i != -1 ; i = v_price_levels[i].ind_prev){
+        for(int i = start;  i != INDEX_NONE ; i = v_price_levels[i].ind_prev){
             func(v_price_levels[i]);
         }
     }
@@ -265,7 +273,7 @@ class OrderStore{
 
     
     std::vector<Order> v_orders;
-    int init_order_id = -1; //first received order id;
+    int init_order_id = INDEX_NONE; //first received order id;
     PriceLadder& m_ladder;
 public:
 
@@ -275,7 +283,7 @@ public:
 
 
     Order& add_order(int order_id, ORDER_SIDE side, int price, int quantity){
-        if(init_order_id == -1)init_order_id = order_id;
+        if(init_order_id == INDEX_NONE)init_order_id = order_id;
         int index = order_id - init_order_id;
 
         if(index >= v_orders.size()){
@@ -295,7 +303,7 @@ public:
         o.price_level_index = lvl.m_index; //back reference to price level.
         
         if(side == ORDER_SIDE::BID){
-            if(lvl.buy_order_begin_index == -1){ //level empty
+            if(lvl.buy_order_begin_index == INDEX_NONE){ //level empty
                 lvl.buy_order_begin_index = index;
                 lvl.buy_order_end_index = index;
             }else{
@@ -304,7 +312,7 @@ public:
             }
             lvl.num_of_buy_orders++;
         }else{
-            if(lvl.sell_order_begin_index == -1){ //level empty
+            if(lvl.sell_order_begin_index == INDEX_NONE){ //level empty
                 lvl.sell_order_begin_index = index;
                 lvl.sell_order_end_index = index;
             }else{
@@ -324,7 +332,7 @@ public:
 
 
     Order& delete_order(int order_id){
-        if(init_order_id == -1)init_order_id = order_id;
+        if(init_order_id == INDEX_NONE)init_order_id = order_id;
         int index = order_id - init_order_id;
         Order& o = v_orders[index];
         if(o.status != 1)return o;
@@ -353,7 +361,7 @@ public:
             //maintain bbo
             if(lvl.num_of_buy_orders == 0 && lvl.price == m_ladder.max_bid_price){
                 int prev = lvl.ind_prev;
-                while(prev != -1){
+                while(prev != INDEX_NONE){
                     PriceLevel& plvl = m_ladder[prev];
                     if(plvl.num_of_buy_orders != 0){
                         m_ladder.max_bid_price = plvl.price;
@@ -362,9 +370,9 @@ public:
                     }
                     prev = plvl.ind_prev;
                 }
-                if(prev == -1){
-                    m_ladder.max_bid_index = -1;
-                    m_ladder.max_bid_price = -1;
+                if(prev == INDEX_NONE){
+                    m_ladder.max_bid_index = INDEX_NONE;
+                    m_ladder.max_bid_price = PRICE_NONE;
                 }
             }
 
@@ -376,7 +384,7 @@ public:
             //maintain bbo
             if(lvl.num_of_sell_orders == 0 && lvl.price == m_ladder.min_ask_price){
                 int next = lvl.ind_next;
-                while(next != -1){
+                while(next != INDEX_NONE){
                     PriceLevel& nlvl = m_ladder[next];
                     if(nlvl.num_of_sell_orders != 0){
                         m_ladder.min_ask_price = nlvl.price;
@@ -385,9 +393,9 @@ public:
                     }
                     next = nlvl.ind_next;
                 }
-                if(next == -1){
-                    m_ladder.min_ask_index = -1;
-                    m_ladder.min_ask_price = -1;
+                if(next == INDEX_NONE){
+                    m_ladder.min_ask_index = INDEX_NONE;
+                    m_ladder.min_ask_price = PRICE_NONE;
                 }
             }
         }
@@ -435,14 +443,14 @@ public:
 
     /*return most arrgessive order based on side.*/
     int get_best_order(ORDER_SIDE side){
-        if(side == ORDER_SIDE::BID && m_ladder.get_max_bid_index() != -1){
+        if(side == ORDER_SIDE::BID && m_ladder.get_max_bid_index() != INDEX_NONE){
             auto& lvl = m_ladder[m_ladder.get_max_bid_index()];
             return lvl.buy_order_begin_index;
-        }else if(side == ORDER_SIDE::ASK && m_ladder.get_min_ask_index() != -1){
+        }else if(side == ORDER_SIDE::ASK && m_ladder.get_min_ask_index() != INDEX_NONE){
             auto& lvl = m_ladder[m_ladder.get_min_ask_index()];
             return lvl.sell_order_begin_index;
         }
-        return -1;
+        return INDEX_NONE;
     }
 
 
@@ -478,13 +486,13 @@ public:
         
         
         if(side == ORDER_SIDE::BID){
-            while(m_ladder.get_min_ask_price() != -1 && m_ladder.get_min_ask_price() <= price && volume > 0){
+            while(m_ladder.get_min_ask_price() != INDEX_NONE && m_ladder.get_min_ask_price() <= price && volume > 0){
                 int index = get_best_order(ORDER_SIDE::ASK);    //get opposite side best order
                 Order& opp = m_orders[index];
                 match(id,volume,opp);
             }
         }else{
-            while(m_ladder.get_max_bid_price() != -1 && m_ladder.get_max_bid_price() >= price && volume > 0){
+            while(m_ladder.get_max_bid_price() != INDEX_NONE && m_ladder.get_max_bid_price() >= price && volume > 0){
                 int index = get_best_order(ORDER_SIDE::BID);    //get opposite side best order
                 Order& opp = m_orders[index];
                 match(id,volume,opp);
@@ -514,7 +522,7 @@ public:
             if(ll.num_of_buy_orders + ll.num_of_sell_orders != 0) os << ll.price << '\t';
             if(ll.num_of_buy_orders != 0){
                 os <<"buy\t num_of_orders:"<< ll.num_of_buy_orders << " \t[";
-                for(int j = ll.buy_order_begin_index; j != -1; j = orders[j].ind_next){
+                for(int j = ll.buy_order_begin_index; j != INDEX_NONE; j = orders[j].ind_next){
                     os << "(id:" <<orders[j].id <<",vol:"<< orders[j].quantity << ")";
                 }
                 os << "]\t";
@@ -522,7 +530,7 @@ public:
 
             if(ll.num_of_sell_orders != 0){
                 os << "sell\t num_of_orders:" << ll.num_of_sell_orders <<" \t[";
-                for(int j = ll.sell_order_begin_index; j != -1; j = orders[j].ind_next){
+                for(int j = ll.sell_order_begin_index; j != INDEX_NONE; j = orders[j].ind_next){
                     os << "(id:" <<orders[j].id <<",vol:"<< orders[j].quantity << ")";
                 }
                 os << "]";
