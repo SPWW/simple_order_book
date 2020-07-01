@@ -84,6 +84,21 @@ inline void idq_remove(CONTAINER& con, node& n){
 
 
 
+enum class ORDER_SIDE{
+    NONE,
+    BID,
+    ASK
+};
+
+std::ostream& operator <<(std::ostream& os, const ORDER_SIDE& s){
+    switch(s){
+        case ORDER_SIDE::BID: os << "Bid";return os;
+        case ORDER_SIDE::ASK: os << "Ask";return os;
+        case ORDER_SIDE::NONE: os << "None";return os;
+    }
+}
+
+
 struct PriceLevel:node{
     int price = -1;
 
@@ -117,7 +132,7 @@ struct PriceLevel:node{
 
 struct Order: node{
     int id = -1;
-    char side = ' ';
+    ORDER_SIDE side = ORDER_SIDE::NONE;
     short status = -1;  //order_tatus  0:init 1:available 2:completed.
     int quantity = -1;
     int price_level_index = -1;
@@ -184,8 +199,8 @@ public:
     }
 
 
-    inline void update_bbo(int price, char side, int index){
-        if(side == 'B'){
+    inline void update_bbo(int price, ORDER_SIDE side, int index){
+        if(side == ORDER_SIDE::BID){
             if( max_bid_price == -1 || price > max_bid_price){
                 max_bid_price = price;
                 max_bid_index = index;
@@ -199,7 +214,7 @@ public:
     }
 
 
-    int add_price_level(int price, char side){
+    int add_price_level(int price, ORDER_SIDE side){
         int index = get_price_level_index(price);
         if(v_price_levels[index].ind_next != -1 || v_price_levels[index].ind_prev != -1){ //price alread in queue. 
             return index;
@@ -259,7 +274,7 @@ public:
     }
 
 
-    Order& add_order(int order_id, char side, int price, int quantity){
+    Order& add_order(int order_id, ORDER_SIDE side, int price, int quantity){
         if(init_order_id == -1)init_order_id = order_id;
         int index = order_id - init_order_id;
 
@@ -279,7 +294,7 @@ public:
         PriceLevel& lvl = m_ladder[m_ladder.get_price_level_index(price)];
         o.price_level_index = lvl.m_index; //back reference to price level.
         
-        if(side == 'B'){
+        if(side == ORDER_SIDE::BID){
             if(lvl.buy_order_begin_index == -1){ //level empty
                 lvl.buy_order_begin_index = index;
                 lvl.buy_order_end_index = index;
@@ -315,7 +330,7 @@ public:
         if(o.status != 1)return o;
         o.status = 2; //set order status to completed
         PriceLevel& lvl = m_ladder[o.price_level_index];
-        if(o.side == 'B'){ //buy side
+        if(o.side == ORDER_SIDE::BID){ //buy side
             if(lvl.buy_order_begin_index == index){
                 lvl.buy_order_begin_index = o.ind_next;
             }
@@ -415,11 +430,11 @@ public:
     }
 
     /*return most arrgessive order based on side.*/
-    int get_best_order(char side){
-        if(side == 'B' && m_ladder.get_max_bid_index() != -1){
+    int get_best_order(ORDER_SIDE side){
+        if(side == ORDER_SIDE::BID && m_ladder.get_max_bid_index() != -1){
             auto& lvl = m_ladder[m_ladder.get_max_bid_index()];
             return lvl.buy_order_begin_index;
-        }else if(side == 'S' && m_ladder.get_min_ask_index() != -1){
+        }else if(side == ORDER_SIDE::ASK && m_ladder.get_min_ask_index() != -1){
             auto& lvl = m_ladder[m_ladder.get_min_ask_index()];
             return lvl.sell_order_begin_index;
         }
@@ -433,14 +448,15 @@ public:
     price, integer price
     volume, order volume
     */
-    void add_order(int id, char side, int price, int volume){
+    void add_order(int id, char c_side, int price, int volume){
+        
+        ORDER_SIDE side = c_side == 'B'?ORDER_SIDE::BID : ORDER_SIDE::ASK;
         int index = m_ladder.add_price_level(price,side);
         PriceLevel& pl = m_ladder[index]; 
-
-        if(side != 'B' && side != 'S')throw std::runtime_error("wrong side.");
-        if(side == 'B'){
+        
+        if(side == ORDER_SIDE::BID){
             while(m_ladder.get_min_ask_price() != -1 && m_ladder.get_min_ask_price() <= price && volume > 0){
-                int index = get_best_order('S');    //get opposite side best order
+                int index = get_best_order(ORDER_SIDE::ASK);    //get opposite side best order
                 Order& opp = m_orders[index];
                 int t_vol = volume;
                 volume -= opp.quantity;
@@ -461,7 +477,7 @@ public:
             }
         }else{
             while(m_ladder.get_max_bid_price() != -1 && m_ladder.get_max_bid_price() >= price && volume > 0){
-                int index = get_best_order('B');    //get opposite side best order
+                int index = get_best_order(ORDER_SIDE::BID);    //get opposite side best order
                 Order& opp = m_orders[index];
                 int t_vol = volume;
                 volume -= opp.quantity;
