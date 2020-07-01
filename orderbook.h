@@ -330,15 +330,24 @@ public:
         if(o.status != 1)return o;
         o.status = 2; //set order status to completed
         PriceLevel& lvl = m_ladder[o.price_level_index];
+        
+        
+        
+        auto delink_begin_or_end = [&o](int& begin, int& end, int index){
+            if(begin == index){
+                begin = o.ind_next;
+            }
+            if(end == index){
+                end = o.ind_prev;
+            }
+        };
+        
+        
         if(o.side == ORDER_SIDE::BID){ //buy side
-            if(lvl.buy_order_begin_index == index){
-                lvl.buy_order_begin_index = o.ind_next;
-            }
-            if(lvl.buy_order_end_index == index){
-                lvl.buy_order_end_index = o.ind_prev;
-            }
+        
+            
+            delink_begin_or_end(lvl.buy_order_begin_index,lvl.buy_order_end_index,index);
             lvl.num_of_buy_orders--;
-
 
 
             //maintain bbo
@@ -361,12 +370,7 @@ public:
 
 
         }else{ //sell side
-            if(lvl.sell_order_begin_index == index){
-                lvl.sell_order_begin_index = o.ind_next;
-            }
-            if(lvl.sell_order_end_index == index){
-                lvl.sell_order_end_index = o.ind_prev;
-            }
+            delink_begin_or_end(lvl.sell_order_begin_index,lvl.sell_order_end_index,index);
             lvl.num_of_sell_orders--;
 
             //maintain bbo
@@ -442,6 +446,24 @@ public:
     }
 
 
+    void match(int id, int& volume, Order& opp){
+        int t_vol = volume;
+        volume -= opp.quantity;
+        opp.quantity = (volume < 0)?(-volume):0;
+        volume = volume<0?0:volume;
+        int t_px = m_ladder[opp.price_level_index].price;
+        t_vol = t_vol-volume;
+        if(trade_callback){
+            trade_callback(id,t_px,t_vol);
+            trade_callback(opp.id,t_px,t_vol);
+        }
+
+        if(opp.quantity == 0){
+            m_orders.delete_order(opp.id);
+        }
+    }
+
+
     /*
     id, incremental order id.
     side, B:buy, S:sell
@@ -454,44 +476,18 @@ public:
         int index = m_ladder.add_price_level(price,side);
         PriceLevel& pl = m_ladder[index]; 
         
+        
         if(side == ORDER_SIDE::BID){
             while(m_ladder.get_min_ask_price() != -1 && m_ladder.get_min_ask_price() <= price && volume > 0){
                 int index = get_best_order(ORDER_SIDE::ASK);    //get opposite side best order
                 Order& opp = m_orders[index];
-                int t_vol = volume;
-                volume -= opp.quantity;
-                opp.quantity = (volume < 0)?(-volume):0;
-                volume = volume<0?0:volume;
-
-
-                int t_px = m_ladder[opp.price_level_index].price;
-                t_vol = t_vol-volume;
-                if(trade_callback){
-                    trade_callback(id,t_px,t_vol);
-                    trade_callback(opp.id,t_px,t_vol);
-                }
-
-                if(opp.quantity == 0){
-                    m_orders.delete_order(opp.id);
-                }
+                match(id,volume,opp);
             }
         }else{
             while(m_ladder.get_max_bid_price() != -1 && m_ladder.get_max_bid_price() >= price && volume > 0){
                 int index = get_best_order(ORDER_SIDE::BID);    //get opposite side best order
                 Order& opp = m_orders[index];
-                int t_vol = volume;
-                volume -= opp.quantity;
-                opp.quantity = (volume < 0)?(-volume):0;
-                volume = volume<0?0:volume;
-
-                int t_px = m_ladder[opp.price_level_index].price;
-                t_vol = t_vol-volume;
-                trade_callback(id,t_px,t_vol);
-                trade_callback(opp.id,t_px,t_vol);
-
-                if(opp.quantity == 0){
-                    m_orders.delete_order(opp.id);
-                }
+                match(id,volume,opp);
             }
         }
         m_orders.add_order(id,side,price,volume);
